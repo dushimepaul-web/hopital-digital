@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: hopital-frontend
+    ports:
+      - "9016:9016"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - hopital-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: hopital-backend
+    expose:
+      - "9016"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - hopital-network
+    restart: unless-stopped
+    volumes:
+      - backend_uploads:/app/uploads
+
+  db:
+    image: postgres:15-alpine
+    container_name: hopital-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: hopital_db
+      POSTGRES_USER: hopital
+      POSTGRES_PASSWORD: hopital123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - hopital-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hopital -d hopital_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: hopital-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - hopital-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    name: hopital_postgres_data
+  redis_data:
+    name: hopital_redis_data
+  backend_uploads:
+    name: hopital_backend_uploads
+
+networks:
+  hopital-network:
+    name: hopital-network
+    driver: bridge
